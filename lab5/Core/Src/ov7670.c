@@ -189,7 +189,7 @@ uint8_t ov7670_init(void) {
 
 		HAL_Delay(10); // allow time for the camera to process the command
 	}
-
+	
 	print_msg("Camera configured.\n\n");
 	return 0;
 }
@@ -232,9 +232,6 @@ void ov7670_snapshot(uint16_t *buff){
   // Your code here
 	char msg[100];
 	
-	sprintf(msg,"\nEntering snapshot function\n");
-	print_msg(msg);
-	
 	HAL_StatusTypeDef status = HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)buff, IMG_ROWS * IMG_COLS);
 
 	if (status != HAL_OK) {
@@ -243,11 +240,18 @@ void ov7670_snapshot(uint16_t *buff){
 	}
 	
 	HAL_DCMI_Stop(&hdcmi);
-
-	sprintf(msg,"Exiting snapshot function\n");
-	print_msg(msg);
 }
 
 void ov7670_capture(uint16_t *buff){
   // Your code here
+	char msg[100];
+
+	HAL_StatusTypeDef status = HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_CONTINUOUS, (uint32_t)buff, IMG_ROWS * IMG_COLS);
+
+	if (status != HAL_OK) {
+		sprintf(msg, "Error: Failed to start DMA capture!\r\n");
+		print_msg(msg);
+	}
+	
+	HAL_DCMI_Stop(&hdcmi);
 }

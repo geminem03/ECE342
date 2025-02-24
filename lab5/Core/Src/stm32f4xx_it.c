@@ -241,10 +241,11 @@ void DMA2_Stream1_IRQHandler(void)
 
   /* USER CODE END DMA2_Stream1_IRQn 0 */
 	
-	
+	/*
 	char msg[100];
 	sprintf(msg, "DMA interrupt triggered\r\n");
 	print_msg(msg);
+	*/
 	
   HAL_DMA_IRQHandler(&hdma_dcmi);
 	dma_flag = 1;
