@@ -1,0 +1,238 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Main program body
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2023 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+#include <stdio.h>
+#include <math.h>
+#include "config.h"
+#include "fixedpt.h"
+
+/* Defines -------------------------------------------------------------------*/
+#define FULL_SCALE 4095  // 12-bit DAC resolution
+#define NUM_POINTS 628   // Number of points (2π / 0.01 radians)
+#define LUT_SIZE 628     // LUT size (same as number of points)
+#define PI 3.14159265358979
+#define DAC_RESOLUTION 4095
+
+
+/* Global Variables ----------------------------------------------------------*/
+uint16_t sine_lut[LUT_SIZE];  // Lookup table array for sine values
+uint16_t sine_lut_fixed[LUT_SIZE];  // Lookup table array for sine values in fixed point
+char message[100];
+
+/* Function Prototypes -------------------------------------------------------*/
+void generate_sine_with_math(void);
+void generate_sine_lut(void);
+void output_sine_with_lut(void);
+void generate_square_with_sin();
+void generate_square_from_LUT();
+
+// fixed point functions
+void generate_sine_lut_fixed(void);
+void output_sine_with_lut_fixed(void);
+void generate_square_with_sin_fixed();
+void generate_square_from_LUT_fixed();
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_DAC_Init();
+  MX_TIM6_Init();
+  MX_USART3_Init();
+  HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
+
+  /* Generate LUT for sine wave */
+  generate_sine_lut();
+  generate_sine_lut_fixed();
+
+	sprintf(message, "hi");
+        print_msg(message);
+	
+  // initial value
+  HAL_TIM_Base_Start(&htim6);
+  HAL_Delay(1000);
+  
+  int initial_time = __HAL_TIM_GetCounter(&htim6);
+
+  while (1)
+  {
+    /* Toggle LED to indicate the system is running */
+    //HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+    
+
+     //output_sine_with_lut();
+	 //generate_square_with_sin();
+	  //output_sine_with_lut_fixed();
+	  //generate_square_from_LUT();
+		generate_square_with_sin();
+
+    //HAL_Delay(500);  // Add a delay to observe changes
+ }
+}
+
+void generate_sine_with_math(void)
+{
+    double radian_step = 0.01;  // Step size in radians
+    uint16_t dac_value;
+
+    for (int i = 0; i < NUM_POINTS; i++) {
+        double radians = i * radian_step;
+        double sine_value = sin(radians);  // Calculate sine value (-1 to 1)
+
+        // Scale and shift sine value to DAC range (0 to 4095)
+        dac_value = (uint16_t)((sine_value + 1) * (FULL_SCALE / 2));
+
+        // sprintf(message, "adc_res=%d\r\n", dac_value);
+        // print_msg(message);
+
+  
+      // Output the value to the DAC
+        HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_value);
+    }
+}
+
+void generate_sine_lut(void)
+{
+    double radian_step = 0.01;  // Step size in radians
+
+    for (int i = 0; i < LUT_SIZE; i++) {
+        double radians = i * radian_step;
+        double sine_value = sin(radians);
+        sine_lut[i] = (uint16_t)((sine_value + 1) * (FULL_SCALE / 2)); // this is in floating point
+    }
+}
+
+void generate_sine_lut_fixed(void) {
+    double radian_step = 0.01;  // Step size in radians
+
+    for (int i = 0; i < LUT_SIZE; i++) {
+        double radians = i * radian_step;
+        double sine_value = sin(radians);
+
+        //convert to fixed point and scale
+        fixedpt scaled_value = FXD_MUL(FXD_FROM_FLOAT((float)(sine_value + 1)), FXD_FROM_FLOAT((float)(FULL_SCALE / 2)));
+        sine_lut_fixed[i] = FXD_TO_INT(scaled_value);
+
+        sprintf(message, "Fixed LUT value=%d\r\n", sine_lut_fixed[i]);
+        print_msg(message);
+    }
+}
+
+
+
+void output_sine_with_lut(void)
+{
+    for (int i = 0; i < LUT_SIZE; i++) {
+    	sprintf(message, "dac_res=%d\r\n", sine_lut[i]);
+    	        print_msg(message);
+        // Output the value from the LUT to the DAC
+        HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, sine_lut[i]);
+
+    }
+}
+
+void output_sine_with_lut_fixed(void) {
+    for (int i = 0; i < LUT_SIZE; i++) {
+        //uint32_t dac_value = FXD_TO_INT(FXD_MUL(FXD_FROM_INT(sine_lut_fixed[i]), FXD_FROM_INT(10)));
+    	uint32_t dac_value = FXD_TO_INT(FXD_MUL(FXD_FROM_INT(sine_lut_fixed[i]), FXD_FROM_INT(1)));
+
+
+        sprintf(message, "Fixed LUT value=%d\r\n", dac_value);
+        print_msg(message);
+
+        HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_value);
+    }
+}
+
+void generate_square_with_sin() {
+    float step = 0.01; // Step size in radians
+    int max_terms = 2; // Adjust terms for accuracy
+        for (float theta = 0.0; theta < 2.0 * PI; theta += step) {
+            float sum = 0.5;
+            for (int n = 0; n < max_terms; n++) {
+                sum += (2.0 / PI) * (1.0 / (2.0 * n + 1)) * sin((2.0 * n + 1.0) * theta);
+            }
+            uint32_t dac_value = (uint32_t)((sum + 1) * FULL_SCALE / 3.0);
+            sprintf(message, "dac_res=%d\r\n", dac_value);
+                	        print_msg(message);
+            HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_value);
+
+        }
+}
+
+void generate_square_with_sin_fixed() {
+    float theta = 0.0;
+    float step = 0.01; // Step size in radians
+    int max_terms = 5; // Adjust terms for accuracy
+    while (1) {
+        for (theta = 0; theta < 2 * PI; theta += step) {
+            fixedpt sum = FIXEDPT_CONST(0.5);
+            for (int n = 0; n < max_terms; n++) {
+                sum = FXD_ADD(sum, FXD_MUL(FXD_FROM_FLOAT((2.0 / PI) * (1.0 / (2 * n + 1))), FXD_FROM_FLOAT(sin((2 * n + 1) * theta))));
+            }
+            uint32_t dac_value = FXD_TO_INT(FXD_MUL(sum, FXD_FROM_INT(FULL_SCALE)));
+            sprintf(message, "dac_res=%d\r\n", dac_value);
+                	        print_msg(message);
+            HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_value);
+
+        }
+    }
+}
+
+void generate_square_from_LUT() {
+    int max_terms = 5; // Adjust terms for accuracy
+    int index = 0;
+    while (1) {
+        float sum = 0.5;
+        for (int n = 0; n < max_terms; n++) {
+            float harmonic_value = (2.0 / PI) * (1.0 / (2 * n + 1)) * sine_lut[(index * (2 * n + 1)) % LUT_SIZE];
+            sum += harmonic_value;
+        }
+        uint32_t dac_value = (uint32_t)((sum + 1) / 2 * DAC_RESOLUTION);
+        HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_value);
+        index = (index + 1) % LUT_SIZE;
+
+    }
+}
+
+void generate_square_from_LUT_fixed() {
+    int max_terms = 5; // Adjust terms for accuracy
+    int index = 0;
+    while (1) {
+        fixedpt sum = FIXEDPT_CONST(0.5);
+        for (int n = 0; n < max_terms; n++) {
+          fixedpt harmonic_value = FXD_MUL(FXD_FROM_FLOAT((2.0 / PI) * (1.0 / (2 * n + 1))), sine_lut_fixed[(index * (2 * n + 1)) % LUT_SIZE]);
+          sum = FXD_ADD(sum, harmonic_value);
+        }
+        uint32_t dac_value = FXD_TO_INT(FXD_MUL(sum, FXD_FROM_INT(DAC_RESOLUTION)));
+        HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_value);
+        index = (index + 1) % LUT_SIZE;
+    }
+}
